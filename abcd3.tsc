@@ -1,0 +1,865 @@
+import { useState } from 'react';
+import {
+  Box,
+  Button,
+  Typography,
+  TextField,
+  Paper,
+  MenuItem,
+  Select,
+  useTheme,
+  useMediaQuery,
+  Tabs,
+  Tab,
+  IconButton,
+  Chip,
+  Divider,
+} from '@mui/material';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import CloseIcon from '@mui/icons-material/Close';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import SearchIcon from '@mui/icons-material/Search';
+import { getNewRelicData } from '@/RunningWorkflows/apiService';
+/* =========================================================
+   HELPERS
+========================================================= */
+const paymentFlowTypes = [
+  { value: 'PIPE', label: 'PIPE' },
+  { value: 'WRAPPER', label: 'WRAPPER' },
+  { value: 'XCONVERT', label: 'XCONVERT' },
+  { value: 'GermanyReturn', label: 'GermanyReturn' },
+  { value: 'SEPA', label: 'SEPA' },
+  { value: 'COMMON', label: 'COMMON' },
+];
+function formatDuration(ms: number) {
+  if (!ms) return '0 ms';
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(2)} s`;
+  return `${(ms / 60000).toFixed(2)} min`;
+}
+const hasErrorLog = (logs: any[] = []) =>
+  logs.some((log: any) => log.severity === 'ERROR');
+const hasWarningLog = (logs: any[] = []) =>
+  logs.some((log: any) => log.severity === 'WARNING');
+/* =========================================================
+   STATUS HELPERS
+========================================================= */
+const getStatus = (error?: boolean, warning?: boolean) => {
+  if (error) {
+    return {
+      label: 'Error',
+      color: '#ef4444',
+      bg: '#fff5f5',
+      border: '#fecaca',
+    };
+  }
+  if (warning) {
+    return {
+      label: 'Warning',
+      color: '#f59e0b',
+      bg: '#fffbeb',
+      border: '#fde68a',
+    };
+  }
+  return {
+    label: 'Success',
+    color: '#22c55e',
+    bg: '#f0fdf4',
+    border: '#bbf7d0',
+  };
+};
+/* =========================================================
+   METRIC CARD
+========================================================= */
+const MetricCard = ({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) => (
+  <Paper
+    elevation={0}
+    sx={{
+      p: 2,
+      minWidth: 140,
+      borderRadius: 3,
+      border: '1px solid #e2e8f0',
+      background: '#fff',
+    }}
+  >
+    <Typography
+      sx={{
+        fontSize: 12,
+        color: '#64748b',
+        mb: 0.5,
+      }}
+    >
+      {title}
+    </Typography>
+    <Typography
+      sx={{
+        fontSize: 20,
+        fontWeight: 700,
+        color: '#0f172a',
+      }}
+    >
+      {value}
+    </Typography>
+  </Paper>
+);
+/* =========================================================
+   MAIN STAGE NODE
+========================================================= */
+const StageNode = ({
+  stage,
+  selected,
+  error,
+  warning,
+  onClick,
+}: any) => {
+  const status = getStatus(error, warning);
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        minWidth: 220,
+        maxWidth: 260,
+        px: 3,
+        py: 2.2,
+        borderRadius: 3,
+        background: '#fff',
+        border: selected
+          ? '2px solid #2563eb'
+          : '1px solid #dbeafe',
+        position: 'relative',
+        cursor: 'pointer',
+        transition: 'all 0.18s ease',
+        boxShadow: selected
+          ? '0 6px 24px rgba(37,99,235,0.15)'
+          : '0 1px 4px rgba(0,0,0,0.06)',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+        },
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: 5,
+          height: '100%',
+          borderRadius: '12px 0 0 12px',
+          background: status.color,
+        },
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={1} mb={1}>
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: status.color,
+          }}
+        />
+        <Typography
+          sx={{
+            fontWeight: 700,
+            fontSize: 15,
+            color: '#0f172a',
+          }}
+        >
+          {stage.Stage || stage.processing_stage}
+        </Typography>
+      </Box>
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 500,
+          color: '#334155',
+          mb: 0.5,
+        }}
+      >
+        {stage.Substage || stage.processing_substage}
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: 12,
+          color: '#64748b',
+        }}
+      >
+        {stage.app}
+      </Typography>
+    </Box>
+  );
+};
+/* =========================================================
+   INTERNAL APP NODE
+========================================================= */
+const AppNode = ({
+  appObj,
+  selected,
+  error,
+  warning,
+  onClick,
+}: any) => {
+  const status = getStatus(error, warning);
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        minWidth: 220,
+        maxWidth: 260,
+        p: 2,
+        borderRadius: 3,
+        background: '#fff',
+        border: selected
+          ? '2px solid #2563eb'
+          : '1px solid #dbeafe',
+        cursor: 'pointer',
+        position: 'relative',
+        transition: 'all 0.18s ease',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+        },
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: 5,
+          height: '100%',
+          borderRadius: '12px 0 0 12px',
+          background: status.color,
+        },
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={1} mb={1}>
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: status.color,
+          }}
+        />
+        <Typography
+          sx={{
+            fontWeight: 700,
+            fontSize: 14,
+            color: '#0f172a',
+          }}
+        >
+          {appObj.app}
+        </Typography>
+      </Box>
+      <Typography
+        sx={{
+          fontSize: 11,
+          color: '#64748b',
+          wordBreak: 'break-all',
+        }}
+      >
+        {appObj.appuuid}
+      </Typography>
+    </Box>
+  );
+};
+/* =========================================================
+   LOG CARD
+========================================================= */
+const LogCard = ({ log }: any) => {
+  const isError = log.severity === 'ERROR';
+  const isWarning = log.severity === 'WARNING';
+  const status = getStatus(isError, isWarning);
+  return (
+    <Box
+      sx={{
+        p: 2,
+        borderBottom: '1px solid #eef2f7',
+        background: status.bg,
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={1} mb={1}>
+        <Chip
+          label={log.severity || 'INFO'}
+          size="small"
+          sx={{
+            background: status.border,
+            color: status.color,
+            fontWeight: 700,
+            fontSize: 11,
+          }}
+        />
+        <Typography
+          sx={{
+            fontSize: 12,
+            color: '#64748b',
+          }}
+        >
+          {log.timestamp}
+        </Typography>
+      </Box>
+      <Typography
+        sx={{
+          fontFamily: 'monospace',
+          fontSize: 13,
+          color: '#0f172a',
+          wordBreak: 'break-word',
+        }}
+      >
+        {log.message || JSON.stringify(log)}
+      </Typography>
+    </Box>
+  );
+};
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
+const NewRelicTab = () => {
+  const theme = useTheme();
+  const isXs = useMediaQuery(theme.breakpoints.down('sm'));
+  const [transactionId, setTransactionId] = useState('');
+  const [paymentFlowType, setPaymentFlowType] = useState(
+    paymentFlowTypes[0].value
+  );
+  const [fullData, setFullData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedStage1, setSelectedStage1] = useState<any | null>(
+    null
+  );
+  const [selectedStage2, setSelectedStage2] = useState<any | null>(
+    null
+  );
+  const [activeTab, setActiveTab] = useState(0);
+  const [logSearch, setLogSearch] = useState('');
+  /* ========================================================= */
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    setSelectedStage1(null);
+    setSelectedStage2(null);
+    try {
+      const result = await getNewRelicData(
+        transactionId,
+        paymentFlowType
+      );
+      setFullData(result);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch');
+    } finally {
+      setLoading(false);
+    }
+  };
+  /* ========================================================= */
+  const stage1Results =
+    fullData?.firstStage?.results || [];
+  const totalDuration =
+    stage1Results.length > 1
+      ? Number(
+          stage1Results[stage1Results.length - 1]
+            .timestamp
+        ) - Number(stage1Results[0].timestamp)
+      : 0;
+  const timeDiffs =
+    stage1Results.length > 1
+      ? stage1Results.slice(1).map((stage: any, idx: number) =>
+          Number(stage.timestamp) -
+          Number(stage1Results[idx].timestamp)
+        )
+      : [];
+  /* ========================================================= */
+  const hasErrorInStage1 = (stage1uuid: string) => {
+    const apps =
+      fullData?.secondStage?.result?.[stage1uuid] || [];
+    return apps.some((app: any) =>
+      hasErrorLog(
+        fullData?.thirdStage?.result?.[app.appuuid]
+      )
+    );
+  };
+  const hasWarningInStage1 = (stage1uuid: string) => {
+    const apps =
+      fullData?.secondStage?.result?.[stage1uuid] || [];
+    return apps.some((app: any) =>
+      hasWarningLog(
+        fullData?.thirdStage?.result?.[app.appuuid]
+      )
+    );
+  };
+  const hasErrorInApp = (appuuid: string) =>
+    hasErrorLog(
+      fullData?.thirdStage?.result?.[appuuid]
+    );
+  const hasWarningInApp = (appuuid: string) =>
+    hasWarningLog(
+      fullData?.thirdStage?.result?.[appuuid]
+    );
+  /* ========================================================= */
+  const selectedLogs =
+    (selectedStage2 &&
+      fullData?.thirdStage?.result?.[
+        selectedStage2.appuuid
+      ]) ||
+    [];
+  const filteredLogs = logSearch
+    ? selectedLogs.filter((log: any) =>
+        Object.values(log).some((v) =>
+          String(v)
+            .toLowerCase()
+            .includes(logSearch.toLowerCase())
+        )
+      )
+    : selectedLogs;
+  /* ========================================================= */
+  return (
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background: '#f8fafc',
+        p: { xs: 2, md: 4 },
+      }}
+    >
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 3,
+          borderRadius: 4,
+          border: '1px solid #e2e8f0',
+          background: '#fff',
+          mb: 3,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 26,
+            fontWeight: 800,
+            color: '#0f172a',
+            mb: 3,
+          }}
+        >
+          Transaction Trace Explorer
+        </Typography>
+        {/* SEARCH BAR */}
+        <Box
+          display="flex"
+          gap={2}
+          flexWrap="wrap"
+          mb={3}
+        >
+          <TextField
+            value={transactionId}
+            onChange={(e) =>
+              setTransactionId(e.target.value)
+            }
+            placeholder="Enter Transaction ID"
+            size="small"
+            sx={{ minWidth: 300 }}
+          />
+          <Select
+            size="small"
+            value={paymentFlowType}
+            onChange={(e) =>
+              setPaymentFlowType(
+                e.target.value as string
+              )
+            }
+          >
+            {paymentFlowTypes.map((opt) => (
+              <MenuItem
+                key={opt.value}
+                value={opt.value}
+              >
+                {opt.label}
+              </MenuItem>
+            ))}
+          </Select>
+          <Button
+            variant="contained"
+            onClick={fetchData}
+            disabled={loading || !transactionId}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              px: 3,
+            }}
+          >
+            Fetch Trace
+          </Button>
+        </Box>
+        {/* METRICS */}
+        {stage1Results.length > 0 && (
+          <Box
+            display="flex"
+            gap={2}
+            flexWrap="wrap"
+          >
+            <MetricCard
+              title="Duration"
+              value={formatDuration(totalDuration)}
+            />
+            <MetricCard
+              title="Services"
+              value={stage1Results.length}
+            />
+            <MetricCard
+              title="Flow Type"
+              value={paymentFlowType}
+            />
+            <MetricCard
+              title="Status"
+              value={
+                stage1Results.some((s: any) =>
+                  hasErrorInStage1(s.uuid)
+                )
+                  ? 'Error'
+                  : 'Success'
+              }
+            />
+          </Box>
+        )}
+      </Paper>
+      {/* =====================================================
+          MAIN FLOW
+      ===================================================== */}
+      {stage1Results.length > 0 && (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 4,
+            borderRadius: 4,
+            border: '1px solid #e2e8f0',
+            background: '#fff',
+            overflowX: 'auto',
+          }}
+        >
+          <Typography
+            sx={{
+              fontWeight: 700,
+              color: '#0f172a',
+              mb: 4,
+              fontSize: 18,
+            }}
+          >
+            Transaction Flow
+          </Typography>
+          <Box
+            display="flex"
+            alignItems="center"
+            minWidth="max-content"
+          >
+            {stage1Results.map(
+              (stage: any, idx: number) => (
+                <Box
+                  key={stage.uuid}
+                  display="flex"
+                  alignItems="center"
+                >
+                  <StageNode
+                    stage={stage}
+                    selected={
+                      selectedStage1?.uuid ===
+                      stage.uuid
+                    }
+                    error={hasErrorInStage1(
+                      stage.uuid
+                    )}
+                    warning={hasWarningInStage1(
+                      stage.uuid
+                    )}
+                    onClick={() => {
+                      setSelectedStage1(stage);
+                      setSelectedStage2(null);
+                    }}
+                  />
+                  {idx <
+                    stage1Results.length - 1 && (
+                    <Box
+                      display="flex"
+                      flexDirection="column"
+                      alignItems="center"
+                      mx={2}
+                    >
+                      <ArrowForwardIcon
+                        sx={{
+                          color: '#3b82f6',
+                          fontSize: 34,
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          color: '#64748b',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {formatDuration(
+                          timeDiffs[idx]
+                        )}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              )
+            )}
+          </Box>
+          {/* =====================================================
+              INTERNAL FLOW
+          ===================================================== */}
+          {selectedStage1 && (
+            <Paper
+              elevation={0}
+              sx={{
+                mt: 5,
+                p: 3,
+                borderRadius: 4,
+                border: '1px solid #dbeafe',
+                background: '#f8fbff',
+              }}
+            >
+              <Typography
+                sx={{
+                  mb: 3,
+                  fontWeight: 700,
+                  color: '#1e40af',
+                  fontSize: 14,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1,
+                }}
+              >
+                Internal Service Calls
+              </Typography>
+              <Box
+                display="flex"
+                alignItems="center"
+                overflow="auto"
+                pb={1}
+              >
+                {(
+                  fullData?.secondStage?.result?.[
+                    selectedStage1.uuid
+                  ] || []
+                ).map(
+                  (
+                    appObj: any,
+                    idx: number,
+                    arr: any[]
+                  ) => (
+                    <Box
+                      key={appObj.appuuid}
+                      display="flex"
+                      alignItems="center"
+                    >
+                      <AppNode
+                        appObj={appObj}
+                        selected={
+                          selectedStage2?.appuuid ===
+                          appObj.appuuid
+                        }
+                        error={hasErrorInApp(
+                          appObj.appuuid
+                        )}
+                        warning={hasWarningInApp(
+                          appObj.appuuid
+                        )}
+                        onClick={() =>
+                          setSelectedStage2(appObj)
+                        }
+                      />
+                      {idx < arr.length - 1 && (
+                        <ArrowForwardIcon
+                          sx={{
+                            mx: 2,
+                            color: '#60a5fa',
+                          }}
+                        />
+                      )}
+                    </Box>
+                  )
+                )}
+              </Box>
+            </Paper>
+          )}
+        </Paper>
+      )}
+      {/* =====================================================
+          BOTTOM INSPECTOR PANEL
+      ===================================================== */}
+      {selectedStage2 && (
+        <Paper
+          elevation={0}
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '48vh',
+            background: '#fff',
+            borderTop: '1px solid #e2e8f0',
+            borderRadius: '18px 18px 0 0',
+            boxShadow:
+              '0 -10px 40px rgba(0,0,0,0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 999,
+          }}
+        >
+          {/* HEADER */}
+          <Box
+            display="flex"
+            alignItems="center"
+            gap={2}
+            px={3}
+            py={2}
+          >
+            <Typography
+              sx={{
+                fontWeight: 700,
+                fontSize: 18,
+                color: '#0f172a',
+              }}
+            >
+              {selectedStage2.app}
+            </Typography>
+            <Chip
+              label={
+                hasErrorInApp(
+                  selectedStage2.appuuid
+                )
+                  ? 'Error'
+                  : hasWarningInApp(
+                      selectedStage2.appuuid
+                    )
+                  ? 'Warning'
+                  : 'Success'
+              }
+              size="small"
+            />
+            <Box flexGrow={1} />
+            <TextField
+              value={logSearch}
+              onChange={(e) =>
+                setLogSearch(e.target.value)
+              }
+              placeholder="Search logs..."
+              size="small"
+              InputProps={{
+                startAdornment: (
+                  <SearchIcon
+                    sx={{
+                      fontSize: 16,
+                      color: '#94a3b8',
+                      mr: 1,
+                    }}
+                  />
+                ),
+              }}
+            />
+            <Button
+              startIcon={<FilterListIcon />}
+              variant="outlined"
+              size="small"
+            >
+              Filter
+            </Button>
+            <IconButton
+              onClick={() =>
+                setSelectedStage2(null)
+              }
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <Divider />
+          {/* TABS */}
+          <Tabs
+            value={activeTab}
+            onChange={(_, v) => setActiveTab(v)}
+            sx={{
+              px: 2,
+            }}
+          >
+            <Tab label="Logs" />
+            <Tab label="Details" />
+            <Tab label="Metrics" />
+            <Tab label="Attributes" />
+          </Tabs>
+          <Divider />
+          {/* CONTENT */}
+          <Box
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+            }}
+          >
+            {/* LOGS */}
+            {activeTab === 0 && (
+              <Box>
+                {filteredLogs.map(
+                  (log: any, idx: number) => (
+                    <LogCard
+                      key={idx}
+                      log={log}
+                    />
+                  )
+                )}
+                {filteredLogs.length === 0 && (
+                  <Box
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    height="100%"
+                  >
+                    <Typography
+                      sx={{
+                        color: '#94a3b8',
+                      }}
+                    >
+                      No logs found
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+            {/* DETAILS */}
+            {activeTab === 1 && (
+              <Box p={3}>
+                <Typography mb={2}>
+                  <strong>App:</strong>{' '}
+                  {selectedStage2.app}
+                </Typography>
+                <Typography>
+                  <strong>UUID:</strong>{' '}
+                  {selectedStage2.appuuid}
+                </Typography>
+              </Box>
+            )}
+            {/* METRICS */}
+            {activeTab === 2 && (
+              <Box p={3}>
+                <Typography>
+                  Metrics coming soon
+                </Typography>
+              </Box>
+            )}
+            {/* ATTRIBUTES */}
+            {activeTab === 3 && (
+              <Box p={3}>
+                <Typography>
+                  Attributes coming soon
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </Paper>
+      )}
+    </Box>
+  );
+};
+export default NewRelicTab;
